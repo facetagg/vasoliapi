@@ -5,7 +5,7 @@ const { MongoClient } = require("mongodb");
 // Importar rutas
 const authRoutes = require("./endpoints/auth");
 const flujos = require("./endpoints/flujos");
-const answersRoutes = require("./endpoints/answers");
+const departments = require("./endpoints/departments");
 const mailRoutes = require("./endpoints/mail");
 const gen = require("./endpoints/Generador");
 const noti = require("./endpoints/notificaciones");
@@ -45,16 +45,17 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Rutas
+// Rutas listas
 app.use("/api/auth", authRoutes);
 app.use("/api/workflows", flujos);
-app.use("/api/respuestas", answersRoutes);
+app.use("/api/departments", departments);
 app.use("/api/mail", mailRoutes);
-app.use("/api/generador", gen);
 app.use("/api/noti", noti);
+
+//rutas sin uso
 app.use("/api/menu", menu);
 app.use("/api/plantillas", plantillas);
-
+app.use("/api/generador", gen);
 
 
 // Ruta base

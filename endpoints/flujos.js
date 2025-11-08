@@ -77,7 +77,7 @@ router.put('/:id', async (req, res) => {
 });
 
 
-// 2. ENDPOINT GET: Obtener un flujo por ID
+// 3. ENDPOINT GET: Obtener un flujo por ID
 // URL: GET /api/workflows/:id
 router.get('/:id', async (req, res) => {
     try {
@@ -103,7 +103,7 @@ router.get('/:id', async (req, res) => {
 });
 
 
-// 3. ENDPOINT DELETE: Eliminar un flujo
+// 4. ENDPOINT DELETE: Eliminar un flujo
 // URL: DELETE /api/workflows/:id
 router.delete('/:id', async (req, res) => {
     try {
@@ -130,7 +130,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 
-// 4. ENDPOINT GET: Listar todos los flujos (opcional, para una vista de administración)
+// 5. ENDPOINT GET: Listar todos los flujos (opcional, para una vista de administración)
 // URL: GET /api/workflows
 router.get("/", async (req, res) => {
   try {
