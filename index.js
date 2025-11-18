@@ -16,17 +16,10 @@ const plantillas = require("./endpoints/plantillas");
 
 const app = express();
 //actualizando
-const corsOptions = {
-  // 💡 Permite tu dominio frontend si está en producción.
-  // En desarrollo, puedes usar true o especificar el puerto de desarrollo.
-  origin: 'https://vasoliweb.vercel.app', 
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'], 
-  credentials: true,
-};
+
 
 // 🔑 APLICAR EL MIDDLEWARE DE CORS CON LAS OPCIONES
-app.use(cors(corsOptions));
+app.use(cors());
 
 app.use(express.json());
 
