@@ -135,7 +135,7 @@ router.get("/full/:mail", async (req, res) => {
       estado: usr.estado, // Asumiendo que existe
       
       createdAt: usr.createdAt,
-      updatedAt: usr.updatedAt,
+      updatedAt: usr.updatedAt,                   
     };
 
     // Devolver solo el objeto filtrado
