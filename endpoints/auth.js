@@ -3,6 +3,7 @@ const router = express.Router();
 const crypto = require("crypto");
 const { ObjectId } = require('mongodb');
 const multer = require('multer');
+const { validarToken } = require('../utils/validarToken');
 
 let activeTokens = [];
 const TOKEN_EXPIRATION = 1000 * 60 * 60;
