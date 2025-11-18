@@ -91,6 +91,63 @@ router.post("/login", async (req, res) => {
   }
 });
 
+
+
+router.get("/full/:mail", async (req, res) => {
+  try {
+    const userMail = req.params.mail;
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: "Token de autenticación requerido" });
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    const validationResult = await validarToken(req.db, token);
+
+    if (!validationResult.ok) {
+      // Si el token no es válido (expirado, inexistente, etc.)
+      return res.status(401).json({ error: `Acceso no autorizado: ${validationResult.reason}` });
+    }
+    
+    // 2. BUSCAR EL USUARIO POR CORREO
+    const usr = await req.db
+      .collection("usuarios")
+      .findOne({ mail: userMail });
+
+    if (!usr) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    // 3. FILTRADO DE CAMPOS SENSIBLES (Proyección manual)
+    const profileData = {
+      // Datos de identificación (no sensibles)
+      _id: usr._id,
+      id: usr.id, // Si usas un ID secundario
+      nombre: usr.nombre,
+      apellido: usr.apellido,
+      mail: usr.mail,
+      
+      // Datos de perfil/rol
+      // Nota: Si ya migraste a 'departamento', usa 'usr.departamento'
+      departamento: usr.departamento || usr.empresa, 
+      cargo: usr.cargo,
+      rol: usr.rol,
+      estado: usr.estado, // Asumiendo que existe
+      
+      createdAt: usr.createdAt,
+      updatedAt: usr.updatedAt,
+    };
+
+    // Devolver solo el objeto filtrado
+    res.json(profileData);
+    
+  } catch (err) {
+    console.error("Error al obtener Usuario completo:", err);
+    res.status(500).json({ error: "Error al obtener Usuario completo" });
+  }
+});
+
+
 // VALIDATE - Consulta token desde DB
 router.post("/validate", async (req, res) => {
   const { token, email, cargo } = req.body;
