@@ -1,4 +1,4 @@
-export async function validarToken(db, token) {
+async function validarToken(db, token) {
   console.log("TOKEN RECIBIDO: ", token);
   const tokenData = await db.collection("tokens").findOne({ "token": token });
 
@@ -30,3 +30,5 @@ export async function validarToken(db, token) {
 */
   return { ok: true };
 }
+
+module.exports = { validarToken };

@@ -1,7 +1,7 @@
 const { ObjectId } = require("mongodb");
 
 
-export async function registrarHistorial(db, titulo, areaTrabajo, descripcion) {
+async function registrarHistorial(db, titulo, areaTrabajo, descripcion) {
     const historial = db.collection("historial");
 
     const data = {
@@ -33,3 +33,5 @@ if (process.argv[1].includes("historialTest.js")) {
 
   registrarHistorial(titulo, areaTrabajo, descripcion);
 }
+
+module.exports = { registrarHistorial };
