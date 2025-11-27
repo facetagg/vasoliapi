@@ -7,6 +7,7 @@ const MONGO_URI = process.env.MONGO_URI || "";
 const authRoutes = require("./endpoints/auth");
 const flujos = require("./endpoints/flujos");
 const departments = require("./endpoints/departments");
+const tareas = require("./endpoints/tareas");
 const mailRoutes = require("./endpoints/mail");
 const gen = require("./endpoints/Generador");
 const noti = require("./endpoints/notificaciones");
@@ -57,6 +58,7 @@ app.use(async (req, res, next) => {
 // Rutas listas
 app.use("/api/auth", authRoutes);
 app.use("/api/workflows", flujos);
+app.use("/api/tareas", tareas);
 app.use("/api/departments", departments);
 app.use("/api/mail", mailRoutes);
 app.use("/api/noti", noti);
