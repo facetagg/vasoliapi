@@ -73,33 +73,67 @@ router.get('/tasks-by-email/:email', async (req, res) => {
         const { email } = req.params;
         if (!email) return res.status(400).json({ error: "Email requerido" });
 
+        // 1. Buscar Usuario para obtener el nombre del departamento
         const usuario = await req.db.collection('usuarios').findOne(
             { mail: email },
             { projection: { departamento: 1, empresa: 1 } }
         );
 
         if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
-        console.log(usuario);
 
-        const departamento = usuario.departamento || usuario.empresa;
-        if (!departamento) return res.status(404).json({ error: "Departamento no definido para el usuario" });
-        console.log(departamento);
+        const nombreDepartamento = usuario.departamento || usuario.empresa;
+        if (!nombreDepartamento) return res.status(404).json({ error: "Departamento no definido para el usuario" });
 
-        let query = {};
-        if (ObjectId.isValid(departamento._id)) {
-            const objId = departamento._id;
-            query = { $or: [{ department: objId }, { department: objId }, { departamento}] };
-        } else {
-            const re = new RegExp(departamento, 'i');
-            query = { $or: [{ departamento }, { departamento: { $regex: re } }, { departmentName: { $regex: re } }] };
-        }
+        // 2. Buscar el documento del Departamento para obtener su _id
+        // Usamos Regex para ignorar mayúsculas/minúsculas
+        const departamentDoc = await req.db.collection("departamentos").findOne({
+            name: { $regex: new RegExp(`^${nombreDepartamento}$`, 'i') }
+        });
 
-        const tareas = await req.db.collection(WORKFLOW_COLLECTION).find(query).toArray();
-        res.json({ departamento, count: tareas.length, tareas });
+        if (!departamentDoc) return res.status(404).json({ error: `Departamento '${nombreDepartamento}' no existe en la DB` });
+
+        const targetDeptId = departamentDoc._id.toString(); // El ID que buscamos en los nodos
+
+        console.log(`Buscando tareas para Dept: ${nombreDepartamento} (ID: ${targetDeptId})`);
+
+        // 3. Buscar Workflows y filtrar nodos específicos
+        // Paso A: Encontrar workflows que tengan AL MENOS un nodo con ese department ID
+        const workflows = await req.db.collection(WORKFLOW_COLLECTION).find({
+            "nodes.department": targetDeptId
+        }).toArray();
+
+        // Paso B: Extraer solo los nodos (tareas) que coincidan.
+        // La consulta de Mongo devuelve el documento entero, necesitamos filtrar el array 'nodes' con JS.
+        let tareasEncontradas = [];
+
+        workflows.forEach(workflow => {
+            // Filtramos los nodos internos que pertenecen a este departamento
+            const nodosDelDepto = workflow.nodes.filter(node => 
+                node.department === targetDeptId && node.type === 'task' // Opcional: asegurar que sea tipo tarea
+            );
+
+            // Agregamos info del workflow padre por si la necesitas en el frontend
+            const nodosConContexto = nodosDelDepto.map(node => ({
+                ...node,
+                workflowName: workflow.name,
+                workflowId: workflow._id
+            }));
+
+            tareasEncontradas = [...tareasEncontradas, ...nodosConContexto];
+        });
+
+        res.json({ 
+            departamento: departamentDoc.name, 
+            departamentoId: targetDeptId,
+            count: tareasEncontradas.length, 
+            tareas: tareasEncontradas 
+        });
+
     } catch (err) {
         console.error("Error en tasks-by-email:", err);
         res.status(500).json({ error: "Error interno al obtener tareas por email" });
     }
 });
+
 
 module.exports = router;
