@@ -5,7 +5,7 @@ const { isEmail } = require("validator");
 // --- CONFIGURACIÓN SMTP ---
 const MAIL_CREDENTIALS = {
   host: process.env.SMTP_HOST || "45.239.111.63",
-  port: Number(process.env.SMTP_PORT) || 465,
+  port: Number(process.env.SMTP_PORT) || 587,
   secure:
     process.env.SMTP_SECURE !== undefined
       ? process.env.SMTP_SECURE === "true"
@@ -163,11 +163,53 @@ const sendEmail = async ({ to, subject, html, text, from }) => {
       command: err.command,
       envelope: mailOptions.envelope,
     });
+
+    // Si falla por autorización en MAIL FROM, intentar reintento con STARTTLS (puerto 587)
+    if (err && err.responseCode === 550 && err.command === "MAIL FROM") {
+      try {
+        console.info("Intentando reintento con STARTTLS en puerto 587 (fallback)...");
+        const altTransporter = nodemailer.createTransport({
+          host: MAIL_CREDENTIALS.host,
+          port: Number(process.env.FALLBACK_SMTP_PORT || 587),
+          secure: false,
+          requireTLS: true,
+          auth: MAIL_CREDENTIALS.auth,
+          authMethod: process.env.SMTP_AUTH_METHOD || "LOGIN",
+          tls: {
+            rejectUnauthorized:
+              process.env.SMTP_REJECT_UNAUTHORIZED === "true" ? true : false,
+          },
+        });
+
+        const info2 = await altTransporter.sendMail(mailOptions);
+        console.info("Reintento OK con STARTTLS:", { response: info2.response });
+        return { ok: true, messageId: info2.messageId, response: info2.response, fallback: true };
+      } catch (err2) {
+        console.error("Reintento con STARTTLS falló:", {
+          message: err2.message,
+          code: err2.code,
+          response: err2.response,
+          responseCode: err2.responseCode,
+          command: err2.command,
+        });
+      }
+    }
+
     throw { status: 500, message: "Fallo interno al enviar correo." };
   }
 };
 
-module.exports = { sendEmail };
+// Exponer una función de verificación para diagnóstico
+const verifySMTP = async () => {
+  return new Promise((resolve, reject) => {
+    transporter.verify((err, success) => {
+      if (err) return reject(err);
+      resolve(success);
+    });
+  });
+};
+
+module.exports = { sendEmail, verifySMTP };
 
 // Diagnóstico seguro de la contraseña (no imprime la contraseña)
 const _pass = MAIL_CREDENTIALS.auth.pass || "";
