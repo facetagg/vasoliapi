@@ -65,7 +65,7 @@ router.put('/:id', async (req, res) => {
             { returnDocument: "after" } 
         );
         
-        if (!result.value) {
+        if (!result) {
             return res.status(404).json({ message: "Flujo de trabajo no encontrado para actualizar." });
         }
 
