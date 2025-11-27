@@ -124,7 +124,8 @@ async function sendViaMailerSend({ from, envelopeTo, subject, html, text }) {
     throw err;
   }
 
-  return { ok: true, response: data };
+  console.info('MailerSend API response:', { status: res.status, body: data });
+  return { ok: true, status: res.status, response: data };
 }
 
 // --- INICIALIZACIÓN DEL TRANSPORTER ---
@@ -269,7 +270,8 @@ const sendEmail = async ({ to, subject, html, text, from }) => {
     if (process.env.MAILERSEND_API_KEY || process.env.API_KEY) {
       try {
         const apiRes = await sendViaMailerSend({ from: mailOptions.from, envelopeTo: mailOptions.envelope.to, subject, html, text });
-        return { ok: true, provider: 'mailersend', response: apiRes.response };
+        console.info('Envio via MailerSend:', { status: apiRes.status, response: apiRes.response });
+        return { ok: true, provider: 'mailersend', status: apiRes.status, response: apiRes.response };
       } catch (apiErr) {
         console.warn('Envio vía MailerSend API falló, intentando SMTP. Error:', apiErr && (apiErr.message || apiErr.status));
       }
