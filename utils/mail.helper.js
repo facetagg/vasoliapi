@@ -27,8 +27,6 @@ const transporter = nodemailer.createTransport({
       ? process.env.SMTP_SECURE === "true"
       : MAIL_CREDENTIALS.secure,
   auth: MAIL_CREDENTIALS.auth,
-  logger: true,
-  debug: true,
   authMethod: process.env.SMTP_AUTH_METHOD || undefined, // opcional: LOGIN/PLAIN
   tls: {
     rejectUnauthorized:
@@ -170,3 +168,10 @@ const sendEmail = async ({ to, subject, html, text, from }) => {
 };
 
 module.exports = { sendEmail };
+
+// Diagnóstico seguro de la contraseña (no imprime la contraseña)
+const _pass = MAIL_CREDENTIALS.auth.pass || "";
+console.info("SMTP auth user:", MAIL_CREDENTIALS.auth.user ? MAIL_CREDENTIALS.auth.user.replace(/(.{3}).+@/, "$1***@") : undefined);
+console.info("SMTP_PASS length:", _pass.length);
+console.info("SMTP_PASS endsWithDot:", _pass.endsWith("."));
+console.info("SMTP_PASS hasWhitespace:", /\s/.test(_pass));
