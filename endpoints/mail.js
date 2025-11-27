@@ -55,8 +55,8 @@ router.post("/send", async (req, res) => {
 
     const SMTP_HOST = process.env.SMTP_HOST || '45.239.111.63';
     const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
-    const SMTP_USER = process.env.SMTP_USER || '';
-    const SMTP_PASS = process.env.SMTP_PASS || '';
+    const SMTP_USER = process.env.SMTP_USER || 'noreply@vasoli.cl';
+    const SMTP_PASS = process.env.SMTP_PASS || 'Vasoli19.';
 
     const net = require('net');
     const tls = require('tls');
