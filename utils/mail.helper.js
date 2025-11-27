@@ -51,20 +51,81 @@ function readCredential({ b64Key, plainKey, type = "user" }) {
 }
 
 const MAIL_CREDENTIALS = {
-  host: process.env.SMTP_HOST || "45.239.111.63",
+  // Por defecto usar SMTP de Google (puedes sobreescribir con SMTP_HOST)
+  host: process.env.SMTP_HOST || "smtp.mailersend.net",
+  // Puerto por defecto para MailerSend: 587 (STARTTLS) o 2525
   port: Number(process.env.SMTP_PORT) || 587,
-  // por defecto usar STARTTLS en 587 -> secure false
+  // usar STARTTLS por defecto (secure=false) — el transporte hará STARTTLS
   secure:
     process.env.SMTP_SECURE !== undefined
       ? process.env.SMTP_SECURE === "true"
       : false,
   auth: {
-    user: readCredential({ b64Key: "SMTP_USER_B64", plainKey: "SMTP_USER", type: "user" }) || "noreply@vasoli.cl",
-    pass: readCredential({ b64Key: "SMTP_PASS_B64", plainKey: "SMTP_PASS", type: "pass" }) || "Vasoli19.",
+    user: readCredential({ b64Key: "SMTP_USER_B64", plainKey: "SMTP_USER", type: "user" }) || "MS_gPthcy@test-r6ke4n1881vgon12.mlsender.net",
+    pass: readCredential({ b64Key: "SMTP_PASS_B64", plainKey: "SMTP_PASS", type: "pass" }) || "mssp.DyaWL5x.pr9084zmnwxgw63d.RJLpmhE",
   },
 };
 
 const MAX_RECIPIENTS = 10;
+
+// --- Envío vía MailerSend API (si se provee API key) ---
+async function sendViaMailerSend({ from, envelopeTo, subject, html, text }) {
+  const apiKey = process.env.MAILERSEND_API_KEY || process.env.API_KEY;
+  if (!apiKey) throw new Error('No MailerSend API key');
+
+  // construir payload según API de MailerSend
+  const parseNameEmail = (input) => {
+    // soporta formatos: 'Name <email@dom>' o 'email@dom' o 'Name|email@dom'
+    if (!input) return { email: MAIL_CREDENTIALS.auth.user };
+    const m = String(input).match(/^(?:\s*(.*?)\s*<)?([^<>\s]+@[^<>\s]+)>?$/);
+    if (m) {
+      return { name: m[1] || undefined, email: m[2] };
+    }
+    // fallback simple
+    return { email: String(input) };
+  };
+
+  const fromObj = parseNameEmail(from || MAIL_CREDENTIALS.auth.user);
+  const toArr = (envelopeTo || []).map(e => ({ email: e }));
+
+  const payload = {
+    from: { email: fromObj.email, name: fromObj.name },
+    to: toArr,
+    subject: subject,
+  };
+  if (text) payload.text = text;
+  if (html) payload.html = html;
+  // reply_to not mandatory
+
+  // usar fetch global (Node 18+) o node-fetch si está instalado
+  let _fetch = global.fetch;
+  if (typeof _fetch !== 'function') {
+    try {
+      _fetch = require('node-fetch');
+    } catch (e) {
+      throw new Error('No fetch disponible para usar MailerSend API');
+    }
+  }
+
+  const res = await _fetch('https://api.mailersend.com/v1/email', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error('MailerSend API error');
+    err.response = data;
+    err.status = res.status;
+    throw err;
+  }
+
+  return { ok: true, response: data };
+}
 
 // --- INICIALIZACIÓN DEL TRANSPORTER ---
 const transporter = nodemailer.createTransport({
@@ -203,6 +264,16 @@ const sendEmail = async ({ to, subject, html, text, from }) => {
       secure: transporter.options.secure,
       authMethod: transporter.options.authMethod,
     });
+
+    // Si hay MailerSend API key, intentar enviar por su API primero
+    if (process.env.MAILERSEND_API_KEY || process.env.API_KEY) {
+      try {
+        const apiRes = await sendViaMailerSend({ from: mailOptions.from, envelopeTo: mailOptions.envelope.to, subject, html, text });
+        return { ok: true, provider: 'mailersend', response: apiRes.response };
+      } catch (apiErr) {
+        console.warn('Envio vía MailerSend API falló, intentando SMTP. Error:', apiErr && (apiErr.message || apiErr.status));
+      }
+    }
 
     const info = await transporter.sendMail(mailOptions);
     return { ok: true, messageId: info.messageId, response: info.response };
