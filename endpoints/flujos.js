@@ -5,6 +5,16 @@ const { ObjectId } = require('mongodb'); // Asumiendo que MongoDB está en req.d
 // Nombre de la colección donde guardarás los flujos
 const WORKFLOW_COLLECTION = "flujos"; 
 
+// Middleware para asegurar que hay conexión a la BD antes de procesar rutas
+function ensureDb(req, res, next) {
+    if (!req.db) {
+        return res.status(503).json({ error: 'Servicio no disponible: no hay conexión a la base de datos (MONGO_URI no configurado).' });
+    }
+    next();
+}
+
+router.use(ensureDb);
+
 // --- 1. POST: Crear Nuevo Flujo (Solo Creación) ---
 // URL: POST /api/workflows
 router.post('/', async (req, res) => {
