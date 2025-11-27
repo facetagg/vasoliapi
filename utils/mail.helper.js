@@ -27,7 +27,7 @@ const transporter = nodemailer.createTransport({
       ? process.env.SMTP_SECURE === "true"
       : MAIL_CREDENTIALS.secure,
   auth: MAIL_CREDENTIALS.auth,
-  authMethod: process.env.SMTP_AUTH_METHOD || undefined, // opcional: LOGIN/PLAIN
+  authMethod: process.env.SMTP_AUTH_METHOD || "LOGIN", // <- forzar LOGIN por defecto
   tls: {
     rejectUnauthorized:
       process.env.SMTP_REJECT_UNAUTHORIZED === "true" ? true : false,
