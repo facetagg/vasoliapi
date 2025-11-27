@@ -5,6 +5,17 @@ const { ObjectId } = require('mongodb');
 // Colección donde están los flujos/tareas
 const WORKFLOW_COLLECTION = "flujos";
 
+// Middleware simple para asegurar que hay conexión a la BD
+function ensureDb(req, res, next) {
+    if (!req.db) {
+        return res.status(503).json({ error: 'Servicio no disponible: no hay conexión a la base de datos (MONGO_URI no configurado).' });
+    }
+    next();
+}
+
+// Aplicar al router: todas las rutas requieren DB
+router.use(ensureDb);
+
 // 1) Obtener departamento a partir de un email
 // URL: GET /api/workflows/department-by-email/:email
 router.get('/department-by-email/:email', async (req, res) => {
@@ -134,6 +145,29 @@ router.get('/tasks-by-email/:email', async (req, res) => {
     } catch (err) {
         console.error("Error en tasks-by-email:", err);
         res.status(500).json({ error: "Error interno al obtener tareas por email" });
+    }
+});
+
+// 4) Obtener un flujo por su ID (completo)
+// URL: GET /api/tareas/:id
+router.get('/:id', async (req, res) => {
+    try {
+        const workflowId = req.params.id;
+
+        if (!ObjectId.isValid(workflowId)) {
+            return res.status(400).json({ error: 'ID de flujo no válido.' });
+        }
+
+        const workflow = await req.db.collection(WORKFLOW_COLLECTION).findOne({ _id: new ObjectId(workflowId) });
+
+        if (!workflow) {
+            return res.status(404).json({ error: 'Flujo no encontrado.' });
+        }
+
+        res.json(workflow);
+    } catch (err) {
+        console.error('Error al obtener flujo por id en /tareas:', err);
+        res.status(500).json({ error: 'Error interno al obtener flujo' });
     }
 });
 
