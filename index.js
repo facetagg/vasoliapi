@@ -24,10 +24,17 @@ app.use(cors());
 app.use(express.json());
 
 // Configurar conexión a MongoDB (desde variable de entorno)
-const client = new MongoClient(process.env.MONGO_URI);
+let client;
 let db;
 
+if (MONGO_URI) {
+  client = new MongoClient(MONGO_URI);
+} else {
+  console.warn("MONGO_URI no definido — la API funcionará sin conexión a MongoDB.");
+}
+
 async function connectDB() {
+  if (!MONGO_URI) return null;
   if (!db) {
     await client.connect();
     db = client.db("Vasoli");
