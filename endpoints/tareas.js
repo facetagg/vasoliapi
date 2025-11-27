@@ -149,25 +149,49 @@ router.get('/tasks-by-email/:email', async (req, res) => {
 });
 
 // 4) Obtener un flujo por su ID (completo)
-// URL: GET /api/tareas/:id
 router.get('/:id', async (req, res) => {
     try {
-        const workflowId = req.params.id;
+        const taskId = req.params.id;
 
-        if (!ObjectId.isValid(workflowId)) {
-            return res.status(400).json({ error: 'ID de flujo no válido.' });
+        if (!taskId) {
+            return res.status(400).json({ error: 'ID de tarea requerido.' });
         }
 
-        const workflow = await req.db.collection(WORKFLOW_COLLECTION).findOne({ _id: new ObjectId(workflowId) });
+        // 1. Buscar el flujo que contiene un nodo con este ID
+        // La query "nodes.id": taskId busca en todos los documentos donde el array 'nodes'
+        // tenga algún elemento con la propiedad 'id' igual a taskId.
+        const workflow = await req.db.collection(WORKFLOW_COLLECTION).findOne(
+            { "nodes.id": taskId }
+        );
 
         if (!workflow) {
-            return res.status(404).json({ error: 'Flujo no encontrado.' });
+            return res.status(404).json({ error: 'Tarea no encontrada en ningún flujo.' });
         }
 
-        res.json(workflow);
+        // 2. Extraer la tarea específica del array de nodos
+        const taskNode = workflow.nodes.find(node => node.id === taskId);
+
+        if (!taskNode) {
+            // Esto sería raro si el findOne funcionó, pero por seguridad
+            return res.status(404).json({ error: 'Nodo de tarea no encontrado dentro del flujo.' });
+        }
+
+        // 3. Enriquecer la respuesta (Opcional pero recomendado)
+        // Agregamos info del flujo padre para contexto
+        const response = {
+            ...taskNode,
+            workflowId: workflow._id,
+            workflowName: workflow.name,
+            // Normalizar campos si es necesario para tu frontend
+            files: taskNode.files || [], 
+            comments: taskNode.comments || []
+        };
+
+        res.json(response);
+
     } catch (err) {
-        console.error('Error al obtener flujo por id en /tareas:', err);
-        res.status(500).json({ error: 'Error interno al obtener flujo' });
+        console.error('Error al obtener tarea por id:', err);
+        res.status(500).json({ error: 'Error interno al obtener la tarea' });
     }
 });
 
