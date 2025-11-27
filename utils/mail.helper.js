@@ -24,8 +24,8 @@ const MAIL_CREDENTIALS = {
       ? process.env.SMTP_SECURE === "true"
       : false,
   auth: {
-    user: decodeB64("SMTP_USER_B64") || process.env.SMTP_USER || "",
-    pass: decodeB64("SMTP_PASS_B64") || process.env.SMTP_PASS || "",
+    user: decodeB64("SMTP_USER_B64") || process.env.SMTP_USER || "bm9yZXBseUB2YXNvbGkuY2w=",
+    pass: decodeB64("SMTP_PASS_B64") || process.env.SMTP_PASS || "VmFzb2xpMTku",
   },
 };
 
