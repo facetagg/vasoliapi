@@ -111,9 +111,23 @@ const sendEmail = async ({ to, subject, html, text, from }) => {
   if (!subject) throw { status: 400, message: "Campo 'subject' requerido." };
   if (!html && !text) throw { status: 400, message: "Debe incluir 'html' o 'text'." };
 
-  // 3. Construir opciones
+  // 3. Construir opciones y envelope seguro
   const toField = valid.lista.join(", ").trim();
   if (!toField) throw { status: 400, message: "No recipients definidos." };
+
+  // Extraer correos limpios para el envelope (sin nombre)
+  const envelopeTo = valid.lista
+    .map(entry => {
+      const match = entry.match(/<([^>]+)>/);
+      return match ? match[1].trim() : entry.trim();
+    })
+    .filter(Boolean)
+    .map(e => e.toLowerCase())
+    .filter(e => isEmail(e)); // doble comprobación
+
+  if (envelopeTo.length === 0) {
+    throw { status: 400, message: "No hay destinatarios válidos para el envelope." };
+  }
 
   const mailOptions = {
     from: from || MAIL_CREDENTIALS.auth.user,
@@ -121,7 +135,7 @@ const sendEmail = async ({ to, subject, html, text, from }) => {
     subject,
     html,
     text,
-    envelope: { from: MAIL_CREDENTIALS.auth.user, to: valid.lista },
+    envelope: { from: MAIL_CREDENTIALS.auth.user, to: envelopeTo },
   };
 
   // 4. Enviar
