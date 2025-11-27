@@ -6,10 +6,11 @@ const { isEmail } = require("validator");
 const MAIL_CREDENTIALS = {
   host: process.env.SMTP_HOST || "45.239.111.63",
   port: Number(process.env.SMTP_PORT) || 587,
+  // por defecto usar STARTTLS en 587 -> secure false
   secure:
     process.env.SMTP_SECURE !== undefined
       ? process.env.SMTP_SECURE === "true"
-      : true,
+      : false,
   auth: {
     user: process.env.SMTP_USER || "noreply@vasoli.cl",
     pass: process.env.SMTP_PASS || "Vasoli19.",
@@ -25,13 +26,17 @@ const transporter = nodemailer.createTransport({
   secure:
     process.env.SMTP_SECURE !== undefined
       ? process.env.SMTP_SECURE === "true"
-      : MAIL_CREDENTIALS.secure,
+      : MAIL_CREDENTIALS.secure, // false -> STARTTLS
+  // Si secure=false, forzar upgrade a TLS (STARTTLS)
+  requireTLS: MAIL_CREDENTIALS.secure ? false : (process.env.SMTP_REQUIRE_TLS !== undefined ? process.env.SMTP_REQUIRE_TLS === "true" : true),
   auth: MAIL_CREDENTIALS.auth,
-  authMethod: process.env.SMTP_AUTH_METHOD || "LOGIN", // <- forzar LOGIN por defecto
+  authMethod: process.env.SMTP_AUTH_METHOD || "LOGIN",
   tls: {
     rejectUnauthorized:
       process.env.SMTP_REJECT_UNAUTHORIZED === "true" ? true : false,
   },
+  logger: true,
+  debug: true,
 });
 
 // Verificación de conexión al iniciar
