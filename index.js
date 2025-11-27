@@ -75,3 +75,11 @@ app.get("/", (req, res) => {
 
 // Exportar la app para que Vercel la maneje como serverless function
 module.exports = app;
+
+// Si se ejecuta directamente (node index.js), arrancar un servidor HTTP
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Servidor Express escuchando en puerto ${PORT}`);
+  });
+}

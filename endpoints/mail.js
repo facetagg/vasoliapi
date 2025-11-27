@@ -2,7 +2,7 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
 const helmet = require("helmet");
-const { sendEmail } = require("../utils/mail.helper"); // Importamos la lógica
+const { sendEmail, verifySMTP } = require("../utils/mail.helper"); // Importamos la lógica
 
 const router = express.Router();
 
@@ -48,3 +48,17 @@ router.post("/send", async (req, res) => {
 });
 
 module.exports = router;
+
+// --- RUTA DE DIAGNÓSTICO SMTP (protegida por API key) ---
+router.get("/debug/smtp", async (req, res) => {
+  try {
+    const accessKey = req.query.accessKey || req.headers["x-access-key"];
+    if (accessKey !== ACCESS_KEY) return res.status(401).json({ error: "Clave de acceso inválida." });
+
+    const result = await verifySMTP();
+    res.json({ ok: true, verified: result });
+  } catch (err) {
+    console.error("Error en /debug/smtp:", err);
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
