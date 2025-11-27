@@ -76,7 +76,7 @@ router.put('/:id', async (req, res) => {
         }
         
         // Mapear _id a id para el frontend
-        result.value.id = result.value._id.toString();
+        result.value.id = result.value?._id?.toString() || deptId;
 
         res.status(200).json(result.value); 
     } catch (error) {
