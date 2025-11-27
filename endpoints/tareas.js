@@ -79,13 +79,15 @@ router.get('/tasks-by-email/:email', async (req, res) => {
         );
 
         if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
+        console.log(usuario);
 
         const departamento = usuario.departamento || usuario.empresa;
         if (!departamento) return res.status(404).json({ error: "Departamento no definido para el usuario" });
+        console.log(departamento);
 
         const departament = await req.db.collection("departamentos").findOne({"name":departamento});
-        if (!departamento) return res.status(404).json({ error: "Departamento no encontrado" });
-        console.log(departamento);
+        if (!departament) return res.status(404).json({ error: "Departamento no encontrado" });
+        console.log(departament);
 
         let query = {};
         if (ObjectId.isValid(departament._id)) {
