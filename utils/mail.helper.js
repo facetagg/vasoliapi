@@ -4,7 +4,7 @@ const { isEmail } = require("validator");
 
 // --- CONFIGURACIÓN SMTP ---
 const MAIL_CREDENTIALS = {
-  host: "smtps://vasoli.cl",
+  host: "vasoli.cl",
   port: 465,
   secure: true,
   auth: {
