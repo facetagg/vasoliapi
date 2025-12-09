@@ -15,6 +15,7 @@ const menu = require("./endpoints/web");
 const plantillas = require("./endpoints/plantillas");
 const historial = require("./endpoints/historial");
 const googleDrive = require("./endpoints/googleDrive");
+const analytics = require("./endpoints/analytics");
 
 
 
@@ -76,7 +77,7 @@ app.use("/api/plantillas", plantillas);
 app.use("/api/generador", gen);
 app.use("/api/historial", historial);
 app.use("/api/drive", googleDrive);
-
+app.use("/api/analytics", analytics);
 
 // Ruta base
 app.get("/", (req, res) => {
