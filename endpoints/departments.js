@@ -61,7 +61,6 @@ router.put('/:id', async (req, res) => {
         
         // Limpiamos los IDs del cuerpo antes de $set
         delete updates.id; 
-        delete updates._id;
 
         const result = await req.db.collection(DEPARTMENTS_COLLECTION).findOneAndUpdate(
             { _id: new ObjectId(deptId) },
@@ -72,12 +71,12 @@ router.put('/:id', async (req, res) => {
             { returnDocument: "after" } 
         );
         
-        if (!result.value) {
+        if (!result) {
             return res.status(404).json({ message: "Departamento no encontrado para actualizar." });
         }
         
         // Mapear _id a id para el frontend
-        result.value.id = result.value._id.toString();
+        result.value.id = result.value?._id?.toString() || deptId;
 
         res.status(200).json(result.value); 
     } catch (error) {
@@ -132,6 +131,32 @@ router.get("/", async (req, res) => {
   } catch (err) {
     console.error("Error al obtener la lista de departamentos:", err);
     res.status(500).json({ error: "Error al obtener la lista de departamentos" });
+  }
+});
+
+router.get("/mini", async (req, res) => {
+  try {
+    // Usamos 'projection' para pedir SOLO name y supervisorId (y _id que viene por defecto)
+    const departments = await req.db.collection(DEPARTMENTS_COLLECTION)
+      .find({}, { 
+        projection: { 
+          name: 1, 
+          supervisorId: 1 
+        } 
+      })
+      .toArray();
+    
+    // Mapeo limpio para el frontend
+    const miniList = departments.map(dept => ({
+        id: dept._id.toString(),
+        name: dept.name,
+        supervisorId: dept.supervisorId
+    }));
+    
+    res.json(miniList);
+  } catch (err) {
+    console.error("Error al obtener la lista mini de departamentos:", err);
+    res.status(500).json({ error: "Error al cargar departamentos simplificados" });
   }
 });
 

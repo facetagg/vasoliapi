@@ -19,6 +19,8 @@ async function registrarHistorial(db, titulo, areaTrabajo, descripcion) {
 
 }
 
+module.exports = { registrarHistorial };
+
 // --------------------------------------------------------------------
 // Si ejecutas el archivo directamente, toma parámetros desde la consola
 // node historialTest.js "titulo" "area" "descripcion"

@@ -1,30 +1,39 @@
 // mail.js
-// Ruta protegida para enviar correos HTML usando nodemailer
-// npm i nodemailer express-rate-limit helmet validator
-
 const express = require("express");
-const nodemailer = require("nodemailer");
 const rateLimit = require("express-rate-limit");
 const helmet = require("helmet");
-const { isEmail } = require("validator");
+const { sendEmail, verifySMTP, debugManual } = require("../utils/mail.helper");
+require('dotenv').config();
 
 const router = express.Router();
 
-// --- CONFIGURACIÓN ---
-// ⚠️ Reemplaza por tus valores (o idealmente usa variables de entorno)
-const ACCESS_KEY = "MI_CLAVE_SECRETA_AQUI";
-const MAIL_CREDENTIALS = {
-  host: "mail.infoacciona.cl",
-  port: 465,
-  secure: true, // true si usas 465
-  auth: {
-    user: "administracion@infoacciona.cl",
-    pass: "Vicente2025",
-  },
-};
-const MAX_RECIPIENTS = 10;
+// --- CONFIGURACIÓN DE ACCESO ---
+const ACCESS_KEY = process.env.MAIL_KEY || "Vasoli19";
 
-// --- MIDDLEWARES ---
+// --- HELPER: Decodificar variables B64 ---
+function decodeEnvB64(keyB64, keyPlain) {
+  const b64 = process.env[keyB64];
+  const plain = process.env[keyPlain];
+  if (b64 && b64.trim().length > 0) {
+    try {
+      return Buffer.from(b64.trim(), 'base64').toString('utf8');
+    } catch (err) {
+      console.warn(`Fallo al decodificar ${keyB64}:`, err && err.message);
+      return plain || '';
+    }
+  }
+  return plain || '';
+}
+
+// Configuración de SMTP (prioritario vasoli.cl)
+const SMTP_USER = decodeEnvB64('SMTP_USER_B64', 'SMTP_USER');
+const SMTP_PASS = decodeEnvB64('SMTP_PASS_B64', 'SMTP_PASS');
+const SMTP_HOST = process.env.SMTP_HOST_VASOLI || process.env.SMTP_HOST || 'mail.vasoli.cl';
+const SMTP_PORT = Number(process.env.SMTP_PORT_VASOLI || process.env.SMTP_PORT || 465);
+
+// (No logging here — logs are emitted only per-request when debug is explicitly requested)
+
+// --- MIDDLEWARES DE SEGURIDAD ---
 router.use(helmet());
 router.use(express.json({ limit: "200kb" }));
 
@@ -36,79 +45,75 @@ const limiter = rateLimit({
 });
 router.use(limiter);
 
-// --- TRANSPORTER SMTP ---
-const transporter = nodemailer.createTransport({
-  host: MAIL_CREDENTIALS.host,
-  port: MAIL_CREDENTIALS.port,
-  secure: MAIL_CREDENTIALS.secure,
-  auth: MAIL_CREDENTIALS.auth,
-});
-
-// --- Función auxiliar ---
-function validarDestinatarios(raw) {
-  if (!raw) return [];
-  let lista = [];
-
-  if (Array.isArray(raw)) lista = raw;
-  else if (typeof raw === "string") {
-    lista = raw.split(/\s*[;,]\s*/).filter(Boolean);
-    if (lista.length === 0 && raw.trim()) lista = [raw.trim()];
-  } else {
-    return { error: "El campo 'to' debe ser string o array." };
-  }
-
-  if (lista.length > MAX_RECIPIENTS)
-    return { error: `Máximo ${MAX_RECIPIENTS} destinatarios permitidos.` };
-
-  for (const email of lista) {
-    if (!isEmail(email)) return { error: `Email inválido: ${email}` };
-  }
-
-  return { lista };
-}
-
-transporter.verify((error, success) => {
-  if (error) {
-    console.error("❌ Error al conectar al SMTP:", error);
-  } else {
-    console.log("✅ Servidor SMTP listo para enviar correos");
-  }
-});
-
-
-// --- RUTA PRINCIPAL ---
+// --- ENDPOINT: Enviar email ---
 router.post("/send", async (req, res) => {
   try {
-    const { accessKey, to, subject, html, text, from } = req.body || {};
+    const { accessKey, debug, ...emailData } = req.body || {};
 
-    // Protección por clave
-    if (accessKey !== ACCESS_KEY){
+    // Validación de seguridad (API Key)
+    if (accessKey !== ACCESS_KEY) {
       return res.status(401).json({ error: "Clave de acceso inválida." });
     }
-    // Validaciones
-    if (!to) return res.status(400).json({ error: "Campo 'to' requerido." });
-    const valid = validarDestinatarios(to);
-    if (valid.error) return res.status(400).json({ error: valid.error });
 
-    if (!subject) return res.status(400).json({ error: "Campo 'subject' requerido." });
-    if (!html && !text)
-      return res.status(400).json({ error: "Debe incluir 'html' o 'text'." });
+    const debugFlag = !!debug;
 
-    // Construcción del mensaje
-    const mailOptions = {
-      from: from || MAIL_CREDENTIALS.auth.user,
-      to: valid.lista.join(", "),
-      subject,
-      html,
-      text,
-    };
+    // Intenta vasoli.cl primero, si falla usa la instancia de API
+    let result;
+    try {
+      result = await sendEmail(emailData, { host: SMTP_HOST, port: SMTP_PORT, user: SMTP_USER, pass: SMTP_PASS, debug: debugFlag, accessKey });
+    } catch (vasoliError) {
+      if (debugFlag) console.warn('Error enviando por vasoli.cl, intentando instancia de API:', vasoliError && vasoliError.message);
+      // Fallback a la instancia de API (no debug forwarded)
+      result = await sendEmail(emailData, { debug: debugFlag, accessKey });
+    }
 
-    // Envío
-    const info = await transporter.sendMail(mailOptions);
-    res.json({ ok: true, messageId: info.messageId, response: info.response });
+    res.json(result);
+
   } catch (err) {
-    console.error("Error al enviar correo:", err);
-    res.status(500).json({ error: "Fallo interno al enviar correo." });
+    const status = err.status || 500;
+    const message = err.message || "Error desconocido del servidor";
+    
+    if (status === 500) console.error("Error en endpoint /send:", err);
+    
+    res.status(status).json({ error: message });
+  }
+});
+
+// --- RUTA: Diagnóstico SMTP ---
+router.get("/debug/smtp", async (req, res) => {
+  try {
+    const accessKey = req.query.accessKey || req.headers["x-access-key"];
+    if (accessKey !== ACCESS_KEY) return res.status(401).json({ error: "Clave de acceso inválida." });
+
+    const result = await verifySMTP({ host: SMTP_HOST, port: SMTP_PORT, user: SMTP_USER, pass: SMTP_PASS, debug: true, accessKey });
+    res.json({ ok: true, verified: result });
+  } catch (err) {
+    console.error("Error en /debug/smtp:", err);
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// --- RUTA: Diagnóstico manual SMTP (STARTTLS) ---
+router.get('/debug/manual', async (req, res) => {
+  const accessKey = req.query.accessKey || req.headers['x-access-key'];
+  if (accessKey !== ACCESS_KEY) return res.status(401).json({ error: 'Clave de acceso inválida.' });
+
+  // Usar configuración de vasoli.cl por defecto
+  const host = SMTP_HOST;
+  const port = SMTP_PORT;
+  const user = SMTP_USER;
+  const pass = SMTP_PASS;
+
+  if (!user || !pass) {
+    return res.status(400).json({ error: 'Faltan variables de entorno: SMTP_USER y/o SMTP_PASS' });
+  }
+
+  try {
+    const result = await debugManual({ host, port, user, pass, debug: true, accessKey });
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('Error en /debug/manual:', err);
+    return res.status(200).json({ log: [String(err)], success: false });
   }
 });
 
