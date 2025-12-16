@@ -18,13 +18,11 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient } = require("mongodb");
 const MONGO_URI = process.env.MONGO_URI || "";
-const MONGO_URI = process.env.MONGO_URI || "";
 
 // Importar rutas
 const authRoutes = require("./endpoints/auth");
 const flujos = require("./endpoints/flujos");
 const departments = require("./endpoints/departments");
-const tareas = require("./endpoints/tareas");
 const tareas = require("./endpoints/tareas");
 const mailRoutes = require("./endpoints/mail");
 const gen = require("./endpoints/Generador");
@@ -46,14 +44,7 @@ app.use(express.json());
 
 // Configurar conexión a MongoDB (desde variable de entorno)
 let client;
-let client;
 let db;
-
-if (MONGO_URI) {
-  client = new MongoClient(MONGO_URI);
-} else {
-  console.warn("MONGO_URI no definido — la API funcionará sin conexión a MongoDB.");
-}
 
 if (MONGO_URI) {
   client = new MongoClient(MONGO_URI);
@@ -71,7 +62,6 @@ async function connectDB() {
   return db;
 }
 
-// Middleware para inyectar la base de datos en cada request (si está configurada)
 // Middleware para inyectar la base de datos en cada request (si está configurada)
 app.use(async (req, res, next) => {
   try {
