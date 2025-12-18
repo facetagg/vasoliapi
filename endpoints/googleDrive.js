@@ -4,6 +4,7 @@ const path = require('path');
 const { google } = require('googleapis');
 const Stream = require('stream');
 const XLSX = require('xlsx');
+const multer = require('multer');
 
 const router = express.Router();
 
@@ -486,6 +487,111 @@ router.post('/create-text', async (req, res) => {
     if (isInsufficientPermissionError(err)) {
       const reauth = makeReauthUrl();
       return res.status(403).json({ ok: false, error: 'Insufficient Permission. Reauthorize the app.', reauth_url: reauth });
+    }
+    res.status(500).json({ ok: false, error: err.message || String(err) });
+  }
+});
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }); // 20 MB
+
+// Subir un archivo a Drive (usa multipart/form-data, campo "file")
+router.post('/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'Falta el archivo (campo file)' });
+
+    const auth = await ensureAuthClient();
+    const drive = google.drive({ version: 'v3', auth });
+
+    // Prioridad de carpeta: folderId param -> folderUrl param -> env DRIVE_FOLDER_URL -> raíz
+    const folderIdFromUrl = extractFolderId(req.body.folderUrl || req.query.folderUrl);
+    const folderId = req.body.folderId || req.query.folderId || folderIdFromUrl || extractFolderId(process.env.DRIVE_FOLDER_URL);
+    const fileMetadata = {
+      name: req.file.originalname,
+      parents: folderId ? [folderId] : undefined,
+    };
+
+    const bufferStream = new Stream.PassThrough();
+    bufferStream.end(req.file.buffer);
+
+    const response = await drive.files.create({
+      requestBody: fileMetadata,
+      media: {
+        mimeType: req.file.mimetype || 'application/octet-stream',
+        body: bufferStream,
+      },
+      fields: 'id, name, mimeType, size, parents, webViewLink, webContentLink',
+    });
+
+    res.json({ ok: true, file: response.data });
+  } catch (err) {
+    console.error('Drive upload error:', err.message || err);
+    if (isInsufficientPermissionError(err)) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Permisos insuficientes. Reautoriza en /api/drive/auth',
+        reauthUrl: makeReauthUrl(),
+      });
+    }
+    res.status(500).json({ ok: false, error: err.message || String(err) });
+  }
+});
+
+// Borrar un archivo por id
+router.delete('/delete/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const auth = await ensureAuthClient();
+    const drive = google.drive({ version: 'v3', auth });
+
+    await drive.files.delete({ fileId });
+    res.json({ ok: true, deleted: fileId });
+  } catch (err) {
+    console.error('Drive delete error:', err.message || err);
+    if (isInsufficientPermissionError(err)) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Permisos insuficientes. Reautoriza en /api/drive/auth',
+        reauthUrl: makeReauthUrl(),
+      });
+    }
+    res.status(500).json({ ok: false, error: err.message || String(err) });
+  }
+});
+
+// Crear carpeta en Drive
+router.post('/create-folder', async (req, res) => {
+  try {
+    const name = req.body?.name;
+    if (!name) return res.status(400).json({ ok: false, error: 'Falta name' });
+
+    const parentFromUrl = extractFolderId(req.body?.parentUrl || req.query?.parentUrl);
+    const parentId =
+      req.body?.parentId ||
+      req.query?.parentId ||
+      parentFromUrl ||
+      extractFolderId(process.env.DRIVE_FOLDER_URL);
+
+    const auth = await ensureAuthClient();
+    const drive = google.drive({ version: 'v3', auth });
+
+    const response = await drive.files.create({
+      requestBody: {
+        name,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: parentId ? [parentId] : undefined,
+      },
+      fields: 'id, name, mimeType, parents, webViewLink',
+    });
+
+    res.json({ ok: true, folder: response.data });
+  } catch (err) {
+    console.error('Drive create-folder error:', err.message || err);
+    if (isInsufficientPermissionError(err)) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Permisos insuficientes. Reautoriza en /api/drive/auth',
+        reauthUrl: makeReauthUrl(),
+      });
     }
     res.status(500).json({ ok: false, error: err.message || String(err) });
   }
