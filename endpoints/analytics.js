@@ -237,7 +237,7 @@ router.get('/tasks/status-summary', async (req, res) => {
     // Sets de palabras para detectar estados en distintos idiomas
     const completedSet = ['done','completed','finalizado','completado','terminado'];
     const postponedSet = ['postponed','postergada','postergado','reprogramada','pospuesta','pospuesto'];
-    const overdueSet = ['overdue','atrasado','vencido','vencida','vencido'];
+    const overdueSet = ['overdue','atrasado','vencido','vencida'];
 
     // Pipeline: unwind nodes, project relevant fields (status, assignee, due candidates)
     const pipeline = [
@@ -343,9 +343,7 @@ router.get('/export/tasks/status-summary', async (req, res) => {
   try {
     const format = (req.query.format || 'csv').toLowerCase();
 
-    // Reuse the department aggregation to get breakdown
-    const deptResp = await router.handle.bind(router)({ ...req, url: '/tasks/status-summary/by-department', method: 'GET' }, { json: () => {} });
-    // The above internal call not ideal; instead run same pipeline here to avoid complexity
+    // Run pipeline directly to get breakdown data
     const now = new Date();
     const completedSet = ['done','completed','finalizado','completado','terminado'];
     const postponedSet = ['postponed','postergada','postergado','reprogramada','pospuesta','pospuesto'];
