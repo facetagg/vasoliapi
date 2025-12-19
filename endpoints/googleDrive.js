@@ -10,6 +10,12 @@ const router = express.Router();
 
 const TOKEN_PATH = path.join(__dirname, '..', 'data', 'google_tokens.json');
 
+// Scopes usados para el consentimiento de Google (subir/gestionar archivos)
+const SCOPES = [
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/drive'
+];
+
 function ensureDataDir() {
   const dir = path.join(__dirname, '..', 'data');
   if (!fs.existsSync(dir)) fs.mkdirSync(dir);
@@ -40,26 +46,32 @@ function saveTokens(tokens) {
   }
 }
 
-function getOAuth2Client() {
-  const clientId = process.env.CLIENT_ID;
-  const clientSecret = process.env.CLIENT_SECRET;
-  const redirectUri = process.env.REDIRECT_URI || 'http://localhost:3000/api/drive/oauth2callback';
+function getOAuth2Client(redirectUri) {
+  const { CLIENT_ID, CLIENT_SECRET, REDIRECT_URI } = process.env;
+  const uri = redirectUri || REDIRECT_URI;
+  return new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, uri);
+}
 
-  if (!clientId || !clientSecret) {
-    throw new Error('Faltan CLIENT_ID o CLIENT_SECRET en variables de entorno');
+function resolveRedirectUri(req) {
+  const localUri = 'http://localhost:3000/api/drive/oauth2callback';
+  const prodUri = 'https://vasoliltdaapi.vercel.app/api/drive/oauth2callback';
+  const host = req.headers?.host || '';
+  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https');
+
+  const isLocal = host.includes('localhost') || host.startsWith('127.0.0.1');
+  if (isLocal) return localUri;
+
+  // Usa env si está configurado; si apunta a localhost en prod, deriva del host
+  if (process.env.REDIRECT_URI && !process.env.REDIRECT_URI.includes('localhost')) {
+    return process.env.REDIRECT_URI;
   }
-
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  return `${proto}://${host}/api/drive/oauth2callback`; // fallback (prod)
 }
 
 function makeReauthUrl() {
   try {
     const oauth2Client = getOAuth2Client();
-    const scopes = [
-      'https://www.googleapis.com/auth/drive.file',
-      'https://www.googleapis.com/auth/drive'
-    ];
-    return oauth2Client.generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: scopes });
+    return oauth2Client.generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: SCOPES });
   } catch (e) {
     return null;
   }
@@ -81,37 +93,31 @@ function isInsufficientPermissionError(err) {
 // Step 1: iniciar autorización (redirige al consentimiento de Google)
 router.get('/auth', (req, res) => {
   try {
-    const oauth2Client = getOAuth2Client();
-    // request write access so the API can create files
-    const scopes = [
-      'https://www.googleapis.com/auth/drive.file',
-      'https://www.googleapis.com/auth/drive'
-    ];
-    const url = oauth2Client.generateAuthUrl({
+    const oauth2Client = getOAuth2Client(resolveRedirectUri(req));
+    const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
+      scope: SCOPES,
       prompt: 'consent',
-      scope: scopes,
     });
-    res.redirect(url);
+    res.redirect(authUrl);
   } catch (err) {
-    console.error('Auth init error:', err.message || err);
-    res.status(500).json({ ok: false, error: err.message });
+    res.status(500).json({ ok: false, error: err.message || String(err) });
   }
 });
 
 // Step 2: callback donde Google redirige con el código
 router.get('/oauth2callback', async (req, res) => {
   try {
-    const code = req.query.code;
-    if (!code) return res.status(400).json({ ok: false, error: 'Missing code' });
-
-    const oauth2Client = getOAuth2Client();
+    const oauth2Client = getOAuth2Client(resolveRedirectUri(req));
+    const { code } = req.query;
     const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
     saveTokens(tokens);
+    console.log('Tokens guardados en:', TOKEN_PATH);
     res.json({ ok: true, message: 'Tokens guardados', tokens });
   } catch (err) {
-    console.error('OAuth2 callback error:', err.message || err);
-    res.status(500).json({ ok: false, error: err.message || String(err) });
+    console.error('OAuth callback error:', err.message || err);
+    res.status(500).json({ ok: false, message: 'OAuth callback error', error: err.message || String(err) });
   }
 });
 
