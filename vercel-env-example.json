@@ -1,0 +1,7 @@
+{
+  "CORS_ORIGINS": "http://localhost:5173,http://localhost:3000,https://vasoliweb-production.up.railway.app,https://vasoliltdaapi.vercel.app,https://tu-frontend-domain.vercel.app",
+  "MONGO_URI": "mongodb+srv://usuario:password@cluster.mongodb.net/",
+  "SMTP_USER": "tu-email@dominio.com",
+  "SMTP_PASS": "tu-password",
+  "LOG_LEVEL": "info"
+}

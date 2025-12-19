@@ -52,6 +52,12 @@ router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    // Verificar que req.db existe
+    if (!req.db) {
+      console.error("Database connection not available");
+      return res.status(500).json({ error: "Error con base de datos - conexión no disponible" });
+    }
+
     const user = await req.db.collection("usuarios").findOne({ mail: email });
     if (!user) return res.status(401).json({ success: false, message: "Credenciales inválidas" });
 
