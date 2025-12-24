@@ -38,7 +38,7 @@ const app = express();
 app.set('trust proxy', 1); // permite leer X-Forwarded-For cuando hay proxy/load-balancer
 
 // 🔑 CORS con credenciales y lista blanca
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:3000,https://vasoliweb-production.up.railway.app')
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:3000,https://vasoliweb-production.up.railway.app,https://vasoliltdaapi.vercel.app')
   .split(',')
   .map(o => o.trim())
   .filter(Boolean);
@@ -48,11 +48,14 @@ const corsOptions = {
     // Permite requests de same-origin (curl/local) donde origin es undefined
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
+    console.error(`CORS blocked origin: ${origin}. Allowed origins:`, allowedOrigins);
     return callback(new Error('Not allowed by CORS'), false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-access-key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-access-key', 'X-Requested-With'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
@@ -64,12 +67,27 @@ app.use((req, res, next) => {
   if (origin && allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-access-key, X-Requested-With');
     res.header('Vary', 'Origin');
   }
   next();
 });
 
 app.use(express.json());
+
+// Middleware para manejar errores de CORS de manera más informativa
+app.use((err, req, res, next) => {
+  if (err && err.message === 'Not allowed by CORS') {
+    res.status(403).json({
+      error: 'CORS error: Origin not allowed',
+      origin: req.headers.origin,
+      allowedOrigins: allowedOrigins
+    });
+  } else {
+    next(err);
+  }
+});
 
 // Configurar conexión a MongoDB (desde variable de entorno)
 let client;
@@ -94,10 +112,11 @@ async function connectDB() {
 // Middleware para inyectar la base de datos en cada request (si está configurada)
 app.use(async (req, res, next) => {
   try {
-    if (!process.env.MONGO_URI) {
-      req.db = null;
-      return next();
+    // Logging para debugging CORS
+    if (process.env.LOG_LEVEL === 'debug') {
+      console.log(`${req.method} ${req.url} - Origin: ${req.headers.origin}`);
     }
+
     if (!process.env.MONGO_URI) {
       req.db = null;
       return next();
