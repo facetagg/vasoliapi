@@ -68,7 +68,10 @@ function saveTokens(tokens) {
 }
 
 function getOAuth2Client(redirectUri) {
-  const { CLIENT_ID, CLIENT_SECRET, REDIRECT_URI } = process.env;
+  // Accept multiple possible env var names for flexibility
+  const CLIENT_ID = process.env.CLIENT_ID || process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const CLIENT_SECRET = process.env.CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  const REDIRECT_URI = process.env.REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI || process.env.GOOGLE_OAUTH_REDIRECT_URI;
   if (!CLIENT_ID || !CLIENT_SECRET) {
     throw new Error('Faltan variables de entorno CLIENT_ID y/o CLIENT_SECRET para Google Drive');
   }
@@ -150,8 +153,27 @@ async function ensureAuthClient() {
   const saved = loadSavedTokens();
   if (!saved) throw new Error('No hay tokens guardados. Visita /api/drive/auth para autorizar.');
   oauth2Client.setCredentials(saved);
-  // refresh token if needed
+  // Force a token refresh/check early so callers receive a clear error
+  try {
+    // This will trigger refresh if needed
+    await oauth2Client.getAccessToken();
+  } catch (e) {
+    // Rethrow so callers can handle (and we can detect unauthorized_client)
+    throw e;
+  }
   return oauth2Client;
+}
+
+function isUnauthorizedClientError(err) {
+  try {
+    if (!err) return false;
+    if (err && err.response && err.response.data && err.response.data.error === 'unauthorized_client') return true;
+    if (err && err.result && err.result.error === 'unauthorized_client') return true;
+    if (err && err.message && String(err.message).toLowerCase().includes('unauthorized_client')) return true;
+  } catch (e) {
+    // ignore
+  }
+  return false;
 }
 
 function extractFolderId(folderUrl) {
@@ -211,6 +233,11 @@ router.get('/list', async (req, res) => {
         reauth_url: reauth 
       });
     }
+    // Error de cliente no autorizado (ej. mismatch de client_id/secret o redirect_uri)
+    if (isUnauthorizedClientError(err)) {
+      const reauth = makeReauthUrl();
+      return res.status(401).json({ ok: false, error: 'unauthorized_client', message: 'Client unauthorized. Reauthorize the app.', reauth_url: reauth });
+    }
     
     // Error genérico
     res.status(500).json({ ok: false, error: err.message || String(err) });
@@ -237,6 +264,10 @@ router.get('/download/:fileId', async (req, res) => {
     if (isInsufficientPermissionError(err)) {
       const reauth = makeReauthUrl();
       return res.status(403).json({ ok: false, error: 'Insufficient Permission. Reauthorize the app.', reauth_url: reauth });
+    }
+    if (isUnauthorizedClientError(err)) {
+      const reauth = makeReauthUrl();
+      return res.status(401).json({ ok: false, error: 'unauthorized_client', message: 'Client unauthorized. Reauthorize the app.', reauth_url: reauth });
     }
     res.status(500).json({ ok: false, error: err.message || String(err) });
   }
@@ -543,6 +574,10 @@ router.post('/create-text', async (req, res) => {
       const reauth = makeReauthUrl();
       return res.status(403).json({ ok: false, error: 'Insufficient Permission. Reauthorize the app.', reauth_url: reauth });
     }
+    if (isUnauthorizedClientError(err)) {
+      const reauth = makeReauthUrl();
+      return res.status(401).json({ ok: false, error: 'unauthorized_client', message: 'Client unauthorized. Reauthorize the app.', reauth_url: reauth });
+    }
     res.status(500).json({ ok: false, error: err.message || String(err) });
   }
 });
@@ -587,6 +622,9 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         reauthUrl: makeReauthUrl(),
       });
     }
+    if (isUnauthorizedClientError(err)) {
+      return res.status(401).json({ ok: false, error: 'unauthorized_client', message: 'Client unauthorized. Reauthorize the app.', reauth_url: makeReauthUrl() });
+    }
     res.status(500).json({ ok: false, error: err.message || String(err) });
   }
 });
@@ -608,6 +646,9 @@ router.delete('/delete/:fileId', async (req, res) => {
         error: 'Permisos insuficientes. Reautoriza en /api/drive/auth',
         reauthUrl: makeReauthUrl(),
       });
+    }
+    if (isUnauthorizedClientError(err)) {
+      return res.status(401).json({ ok: false, error: 'unauthorized_client', message: 'Client unauthorized. Reauthorize the app.', reauth_url: makeReauthUrl() });
     }
     res.status(500).json({ ok: false, error: err.message || String(err) });
   }
@@ -647,6 +688,9 @@ router.post('/create-folder', async (req, res) => {
         error: 'Permisos insuficientes. Reautoriza en /api/drive/auth',
         reauthUrl: makeReauthUrl(),
       });
+    }
+    if (isUnauthorizedClientError(err)) {
+      return res.status(401).json({ ok: false, error: 'unauthorized_client', message: 'Client unauthorized. Reauthorize the app.', reauth_url: makeReauthUrl() });
     }
     res.status(500).json({ ok: false, error: err.message || String(err) });
   }
